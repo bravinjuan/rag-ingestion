@@ -17,7 +17,7 @@ def get_secret(secretName):
 
 class TextEmbedder():
     openai.api_type = "azure"    
-    openai.api_key = get_secret('azureOpenAIKey')
+    openai.api_key = os.environ.get('AZURE_OPENAI_API_KEY')
     openai.api_base = f"https://{os.getenv('AZURE_OPENAI_SERVICE_NAME')}.openai.azure.com/"
     openai.api_version = os.getenv("AZURE_OPENAI_API_VERSION")
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")

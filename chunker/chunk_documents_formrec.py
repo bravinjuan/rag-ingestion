@@ -61,7 +61,7 @@ def analyze_document_rest(filepath, model):
 
         headers = {
             "Content-Type": "application/json",
-            "Ocp-Apim-Subscription-Key": get_secret('formRecKey')
+            "Ocp-Apim-Subscription-Key": os.environ.get('FORM_REC_KEY')
         }
         body = {
             "urlSource": filepath
@@ -89,7 +89,7 @@ def analyze_document_rest(filepath, model):
 
         headers = {
             "Content-Type": "application/pdf",
-            "Ocp-Apim-Subscription-Key": get_secret('formRecKey')
+            "Ocp-Apim-Subscription-Key": os.environ.get('FORM_REC_KEY')
         }
 
         try:

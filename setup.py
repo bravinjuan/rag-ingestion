@@ -323,7 +323,50 @@ def execute_setup(subscription_id, resource_group, function_app_name, enable_man
     body = { 
         "name": f"{search_index_name}-skillset-chunking",
         "description":"SKillset to do document chunking",
-        "skills":[ 
+        "skills":[
+            {
+                "@odata.type": "#Microsoft.Skills.Text.RegularExpressionSkill",
+                "context": "/document",
+                "inputs": [
+                    {
+                        "name": "documentContent",
+                        "source": "/document/content"
+                    },
+                    {
+                        "name": "pattern",
+                        "value": "weight=(\\d+)"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "name": "matches"
+                    }
+                ]
+            },
+            {
+                "@odata.type": "#Microsoft.Skills.ConditionalSkill",
+                "context": "/document",
+                "inputs": [
+                    {
+                        "name": "condition",
+                        "source": "/document/matches/results/0"
+                    },
+                    {
+                        "name": "whenTrue",
+                        "source": "/document/matches/results/0"
+                    },
+                    {
+                        "name": "whenFalse",
+                        "value": ""
+                    }
+                ],
+                "outputs": [
+                    {
+                        "name": "output",
+                        "targetName": "priority"
+                    }
+                ]
+            },
             { 
                 "@odata.type":"#Microsoft.Skills.Custom.WebApiSkill",
                 "name":"document-chunking",
@@ -406,6 +449,15 @@ def execute_setup(subscription_id, resource_group, function_app_name, enable_man
                 "filterable": False,
                 "facetable": False
             },
+            {
+                "name": "priority",
+                "type": "Edm.Int32",
+                "searchable": True,
+                "filterable": False,
+                "sortable": False,
+                "facetable": False,
+                "retrievable": False
+            },   
             {
                 "name": "chunks",
                 "type": "Collection(Edm.ComplexType)",
@@ -587,7 +639,16 @@ def execute_setup(subscription_id, resource_group, function_app_name, enable_man
                 "retrievable": True,
                 "dimensions": 1536,
                 "vectorSearchConfiguration": "my-vector-config"
-            } 
+            },
+            {
+                "name": "priority",
+                "type": "Edm.Int32",
+                "searchable": True,
+                "filterable": False,
+                "sortable": False,
+                "facetable": False,
+                "retrievable": False
+            },  
         ],
         "corsOptions": {
             "allowedOrigins": [
@@ -646,11 +707,15 @@ def execute_setup(subscription_id, resource_group, function_app_name, enable_man
         "schedule" : { "interval" : f"{search_index_interval}"},
         "fieldMappings" : [
             {
-            "sourceFieldName" : "metadata_storage_path",
-            "targetFieldName" : "id"
+                "sourceFieldName" : "metadata_storage_path",
+                "targetFieldName" : "id"
             }
         ],
         "outputFieldMappings" : [
+            {
+                "sourceFieldName": "/document/priority",
+                "targetFieldName": "priority"
+            }
         ],
         "parameters":
         {
@@ -691,7 +756,28 @@ def execute_setup(subscription_id, resource_group, function_app_name, enable_man
     response_time = time.time() - start_time
     logging.info(f"04 Create indexers step. {round(response_time,2)} seconds")
 
+    ###########################################################################
+    # 06 Creating scoring profiles
+    ###########################################################################
+    logging.info("06 Creating scoring profile step.")
+    start_time = time.time()
+    body = {
+        "name": "priority-scoring",
+        "functions": [
+            {
+                "type": "reciprocal",
+                "fieldName": "priority",
+                "boost": 10, 
+                "interpolation": "linear",
+                "magnitude": 2
+            }
+        ]
+    }
+    if network_isolation: body['parameters']['configuration']['executionEnvironment'] = "private"
+    call_search_api(search_service, search_api_version, "indexes", f"{search_index_name}/scoringProfiles", "put", credential, body)
 
+    response_time = time.time() - start_time
+    logging.info(f"05 Create scoring profiles step. {round(response_time,2)} seconds")
 
 def main(subscription_id=None, resource_group=None, function_app_name=None, enable_managed_identities=False, enable_env_credentials=False):
     """
